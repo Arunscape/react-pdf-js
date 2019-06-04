@@ -11,6 +11,8 @@ type ComponentProps = {
   cMapPacked?: boolean;
   workerSrc?: string;
   withCredentials?: boolean;
+  fillWidth?: boolean;
+  fillHeight?: boolean;
 };
 
 const Pdf = ({
@@ -58,6 +60,8 @@ type HookProps = {
   cMapPacked?: boolean;
   workerSrc?: string;
   withCredentials?: boolean;
+  fillWidth?: boolean;
+  fillHeight?: boolean;
 };
 
 export const usePdf = ({
@@ -70,6 +74,8 @@ export const usePdf = ({
   cMapPacked,
   workerSrc = '//cdnjs.cloudflare.com/ajax/libs/pdf.js/2.1.266/pdf.worker.js',
   withCredentials = false,
+  fillWidth = false,
+  fillHeight = false,
 }: HookProps) => {
   const [pdf, setPdf] = useState();
 
@@ -88,24 +94,45 @@ export const usePdf = ({
 
   // handle changes
   useEffect(() => {
-    if (pdf) {
+    const renderPDF = () => {
       pdf.getPage(page).then((p: any) => drawPDF(p));
+    };
+
+    if (pdf) {
+      window.addEventListener('resize', renderPDF);
     }
+
+    return () => {
+      window.removeEventListener('resize', renderPDF);
+    };
   }, [pdf, page, scale, rotate, canvasEl]);
+
+  const calculateScale = (pageView: any, parentElement: any) => {
+    if (fillWidth) {
+      const pageWidth = pageView[2] - pageView[0];
+      return parentElement.clientWidth / pageWidth;
+    }
+    if (fillHeight) {
+      const pageHeight = pageView[3] - pageView[1];
+      return parentElement.clientHeight / pageHeight;
+    }
+    return scale;
+  };
 
   // draw a page of the pdf
   const drawPDF = (page: any) => {
+    const canvas = canvasEl.current;
+    if (!canvas) {
+      return;
+    }
     // Because this page's rotation option overwrites pdf default rotation value,
     // calculating page rotation option value from pdf default and this component prop rotate.
     const rotation = rotate === 0 ? page.rotate : page.rotate + rotate;
     let dpRatio = 1;
     dpRatio = window.devicePixelRatio;
-    const adjustedScale = scale * dpRatio;
+    const calculatedScale = calculateScale(page.view, canvas.parentElement);
+    const adjustedScale = calculatedScale * dpRatio;
     const viewport = page.getViewport({ scale: adjustedScale, rotation });
-    const canvas = canvasEl.current;
-    if (!canvas) {
-      return;
-    }
     const canvasContext = canvas.getContext('2d');
     canvas.style.width = `${viewport.width / dpRatio}px`;
     canvas.style.height = `${viewport.height / dpRatio}px`;
